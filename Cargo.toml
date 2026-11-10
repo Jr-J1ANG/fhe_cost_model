@@ -1,0 +1,18 @@
+[package]
+name = "fhe_cost_model"
+version = "0.1.0"
+edition = "2024"
+description = "A standalone, parameterized relative cost model for CKKS ciphertext multiplication"
+license = "MIT"
+
+[lib]
+name = "fhe_cost_model"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+csv = "1"
+
+[dev-dependencies]
+approx = "0.5"
