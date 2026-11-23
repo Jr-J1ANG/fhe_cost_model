@@ -1,47 +1,51 @@
 use serde::{Deserialize, Serialize};
 
+/// CKKS cryptographic parameters. q_moduli/p_moduli contain the actual primes
+/// when known; the explicit limb counts allow architecture studies before all
+/// concrete primes have been selected.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CKKSParams {
     pub polynomial_degree: usize,
     pub q_moduli: Vec<u64>,
     pub p_moduli: Vec<u64>,
+    /// Total Q-basis limb count. Active Q limbs are taken from CiphertextInfo.
+    pub q_limb_count: usize,
+    /// P-basis limb count used by the key-switching architecture.
+    pub p_limb_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HardwareProfile {
-    /// Relative cost of one NTT at the configured polynomial degree.
-    pub ntt_cost: f64,
-    /// Relative cost of one modular multiplication unit.
-    pub modular_mul_cost: f64,
-    /// Relative cost of one unit of RNS basis conversion.
-    pub basis_conversion_cost: f64,
-    /// Relative cost of one CKKS rescale operation.
-    pub rescale_cost: f64,
-    /// Relative cost of dropping/alignment by one Q limb.
-    pub mod_switch_per_limb_cost: f64,
-    /// Approximate NTT count per active Q limb for ciphertext multiplication.
-    pub mul_ntt_per_limb: f64,
-    /// Approximate NTT count per active Q limb for relinearization/key switching.
-    pub relin_ntt_per_limb: f64,
-    /// Approximate modular-multiplication count per active Q limb.
-    pub modular_mul_per_limb: f64,
-    /// Approximate basis-conversion work per active Q limb.
-    pub basis_conversion_per_limb: f64,
+    /// Number of parallel NTT/INTT data streams (paper: n_NTT = 8).
+    pub ntt_streams: usize,
+    /// Number of parallel modular-switching lanes (paper: n_lane = 2).
+    pub modular_switch_lanes: usize,
+    /// Number of Montgomery multiplier units in the ciphertext multiplier (paper: 5).
+    pub montgomery_units: usize,
+    /// Pipeline latency of one Montgomery multiplier, in cycles (paper: 7).
+    pub montgomery_latency_cycles: usize,
+    /// Relative weights used to turn operation counts into a scalar score.
+    /// These are calibration parameters, not measured universal constants.
+    pub ntt_transform_cost: f64,
+    pub montgomery_mul_cost: f64,
+    pub modular_add_cost: f64,
+    pub memory_word_cost: f64,
+    /// Optional clock frequency for reporting cycle/time estimates.
+    pub clock_mhz: f64,
 }
 
 impl Default for HardwareProfile {
     fn default() -> Self {
-        // Neutral starting coefficients only. Calibrate these using measurements.
         Self {
-            ntt_cost: 1.0,
-            modular_mul_cost: 1.0,
-            basis_conversion_cost: 1.0,
-            rescale_cost: 1.0,
-            mod_switch_per_limb_cost: 1.0,
-            mul_ntt_per_limb: 3.0,
-            relin_ntt_per_limb: 4.0,
-            modular_mul_per_limb: 8.0,
-            basis_conversion_per_limb: 2.0,
+            ntt_streams: 8,
+            modular_switch_lanes: 2,
+            montgomery_units: 5,
+            montgomery_latency_cycles: 7,
+            ntt_transform_cost: 1.0,
+            montgomery_mul_cost: 1.0,
+            modular_add_cost: 1.0,
+            memory_word_cost: 0.0,
+            clock_mhz: 222.0,
         }
     }
 }
@@ -68,9 +72,7 @@ impl Default for ExecutionPolicy {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CostWeights {
-    /// Weight of scale deviation from the reference scale in lookahead penalty.
     pub scale_deviation_weight: f64,
-    /// Weight of predicted future level-alignment work.
     pub level_mismatch_weight: f64,
     pub reference_scale_log2: f64,
     pub reference_level: usize,
@@ -102,6 +104,8 @@ impl Default for HardwareModelConfig {
                 polynomial_degree: 1 << 14,
                 q_moduli: vec![],
                 p_moduli: vec![],
+                q_limb_count: 4,
+                p_limb_count: 4,
             },
             hardware: HardwareProfile::default(),
             execution: ExecutionPolicy::default(),
